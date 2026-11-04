@@ -7,29 +7,24 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	consoleuiv1alpha1 "github.com/kubevirt-ui/kubevirt-ui-operator/api/v1alpha1"
 	"github.com/kubevirt-ui/kubevirt-ui-operator/internal/labels"
+	"github.com/kubevirt-ui/kubevirt-ui-operator/internal/names"
 )
 
 func PluginServiceAccount(m *Context) *corev1.ServiceAccount {
 	return &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.Spec.Plugin.Name,
-			Namespace: m.OperandNamespace,
-			Labels:    labels.Plugin(m.CR),
-		},
+		Name:      names.PluginDeployment,
+		Namespace: m.OperandNamespace,
+		Labels:    labels.Plugin(m.CR),
 	}
 }
 
 func PluginDeployment(m *Context) *appsv1.Deployment {
-	replicas := consoleuiv1alpha1.Int32OrDefault(m.Spec.Plugin.Replicas, 1)
-	plugin := m.Spec.Plugin
+	replicas := int32(1)
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      plugin.Name,
-			Namespace: m.OperandNamespace,
-			Labels:    labels.Plugin(m.CR),
-		},
+		Name:      names.PluginDeployment,
+		Namespace: m.OperandNamespace,
+		Labels:    labels.Plugin(m.CR),
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: labels.PluginSelector(m.CR)},
@@ -41,26 +36,24 @@ func PluginDeployment(m *Context) *appsv1.Deployment {
 				},
 			},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels.Plugin(m.CR),
-					Annotations: map[string]string{
-						"openshift.io/required-scc": "restricted-v2",
-					},
+				Labels: labels.Plugin(m.CR),
+				Annotations: map[string]string{
+					"openshift.io/required-scc": "restricted-v2",
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: plugin.Name,
-					PriorityClassName:  plugin.PriorityClassName,
+					ServiceAccountName: names.PluginDeployment,
+					PriorityClassName:  names.PriorityClass,
 					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot: boolPtr(true),
+						RunAsNonRoot: new(true),
 						SeccompProfile: &corev1.SeccompProfile{
 							Type: corev1.SeccompProfileTypeRuntimeDefault,
 						},
 					},
 					Containers: []corev1.Container{{
-						Name:            plugin.Name,
-						Image:           plugin.Image,
+						Name:            names.PluginDeployment,
+						Image:           m.PluginImage,
 						ImagePullPolicy: corev1.PullIfNotPresent,
-						Ports:           []corev1.ContainerPort{{Name: "https", ContainerPort: plugin.Port, Protocol: corev1.ProtocolTCP}},
+						Ports:           []corev1.ContainerPort{{Name: "https", ContainerPort: names.PluginPort, Protocol: corev1.ProtocolTCP}},
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceCPU:    resourceQuantity("10m"),
@@ -68,23 +61,21 @@ func PluginDeployment(m *Context) *appsv1.Deployment {
 							},
 						},
 						SecurityContext: &corev1.SecurityContext{
-							AllowPrivilegeEscalation: boolPtr(false),
+							AllowPrivilegeEscalation: new(false),
 							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
 						},
 						VolumeMounts: []corev1.VolumeMount{
-							{Name: plugin.ServingCertSecret, MountPath: "/var/serving-cert", ReadOnly: true},
-							{Name: m.Spec.Config.NginxConfigMapName, MountPath: "/etc/nginx/nginx.conf", SubPath: "nginx.conf", ReadOnly: true},
+							{Name: names.PluginServingCert, MountPath: "/var/serving-cert", ReadOnly: true},
+							{Name: names.NginxConfigMap, MountPath: "/etc/nginx/nginx.conf", SubPath: "nginx.conf", ReadOnly: true},
 						},
 					}},
 					Volumes: []corev1.Volume{
-						{Name: plugin.ServingCertSecret, VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: plugin.ServingCertSecret, DefaultMode: int32Ptr(420)},
-						}},
-						{Name: m.Spec.Config.NginxConfigMapName, VolumeSource: corev1.VolumeSource{
+						{Name: names.PluginServingCert,
+							Secret: &corev1.SecretVolumeSource{SecretName: names.PluginServingCert, DefaultMode: new(int32(420))}},
+						{Name: names.NginxConfigMap,
 							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{Name: m.Spec.Config.NginxConfigMapName},
-							},
-						}},
+								Name: names.NginxConfigMap,
+							}},
 					},
 				},
 			},
@@ -93,23 +84,20 @@ func PluginDeployment(m *Context) *appsv1.Deployment {
 }
 
 func PluginService(m *Context) *corev1.Service {
-	plugin := m.Spec.Plugin
 	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      plugin.ServiceName,
-			Namespace: m.OperandNamespace,
-			Labels:    labels.Plugin(m.CR),
-			Annotations: map[string]string{
-				"service.beta.openshift.io/serving-cert-secret-name": plugin.ServingCertSecret,
-			},
+		Name:      names.PluginService,
+		Namespace: m.OperandNamespace,
+		Labels:    labels.Plugin(m.CR),
+		Annotations: map[string]string{
+			"service.beta.openshift.io/serving-cert-secret-name": names.PluginServingCert,
 		},
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
 			Selector: labels.PluginSelector(m.CR),
 			Ports: []corev1.ServicePort{{
-				Name:       plugin.Name + "-port",
-				Port:       plugin.Port,
-				TargetPort: intstrFromInt32(plugin.Port),
+				Name:       names.PluginDeployment + "-port",
+				Port:       names.PluginPort,
+				TargetPort: intstrFromInt32(names.PluginPort),
 				Protocol:   corev1.ProtocolTCP,
 			}},
 		},
@@ -117,13 +105,11 @@ func PluginService(m *Context) *corev1.Service {
 }
 
 func PluginNetworkPolicy(m *Context) *networkingv1.NetworkPolicy {
-	port := intstrFromInt32(m.Spec.Plugin.Port)
+	port := intstrFromInt32(names.PluginPort)
 	return &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "kubevirt-console-plugin-np",
-			Namespace: m.OperandNamespace,
-			Labels:    labels.Plugin(m.CR),
-		},
+		Name:      names.PluginNetworkPolicy,
+		Namespace: m.OperandNamespace,
+		Labels:    labels.Plugin(m.CR),
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{MatchLabels: labels.PluginSelector(m.CR)},
 			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},

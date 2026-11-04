@@ -8,28 +8,26 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	consoleuiv1alpha1 "github.com/kubevirt-ui/kubevirt-ui-operator/api/v1alpha1"
 	"github.com/kubevirt-ui/kubevirt-ui-operator/internal/labels"
+	"github.com/kubevirt-ui/kubevirt-ui-operator/internal/names"
 )
 
 func ProxyServiceAccount(m *Context) *corev1.ServiceAccount {
 	return &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.Spec.Proxy.Name,
-			Namespace: m.OperandNamespace,
-			Labels:    labels.Proxy(m.CR),
-		},
+		Name:      names.ProxyDeployment,
+		Namespace: m.OperandNamespace,
+		Labels:    labels.Proxy(m.CR),
 	}
 }
 
 func ProxyDeployment(m *Context) *appsv1.Deployment {
-	replicas := consoleuiv1alpha1.Int32OrDefault(m.Spec.Proxy.Replicas, 1)
-	proxy := m.Spec.Proxy
+	replicas := int32(1)
+	tlsArgs := m.Spec.Proxy.TLSArgs
 	container := corev1.Container{
-		Name:            proxy.Name,
-		Image:           proxy.Image,
+		Name:            names.ProxyDeployment,
+		Image:           m.ProxyImage,
 		ImagePullPolicy: corev1.PullIfNotPresent,
-		Ports:           []corev1.ContainerPort{{Name: "https", ContainerPort: proxy.Port, Protocol: corev1.ProtocolTCP}},
+		Ports:           []corev1.ContainerPort{{Name: "https", ContainerPort: names.ProxyPort, Protocol: corev1.ProtocolTCP}},
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resourceQuantity("10m"),
@@ -37,23 +35,21 @@ func ProxyDeployment(m *Context) *appsv1.Deployment {
 			},
 		},
 		SecurityContext: &corev1.SecurityContext{
-			AllowPrivilegeEscalation: boolPtr(false),
+			AllowPrivilegeEscalation: new(false),
 			Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
-			ReadOnlyRootFilesystem:   boolPtr(true),
+			ReadOnlyRootFilesystem:   new(true),
 		},
 		VolumeMounts: []corev1.VolumeMount{
-			{Name: proxy.ServingCertSecret, MountPath: "/app/cert", ReadOnly: true},
+			{Name: names.ProxyServingCert, MountPath: "/app/cert", ReadOnly: true},
 		},
 	}
-	if len(proxy.TLSArgs) > 0 {
-		container.Args = append([]string{}, proxy.TLSArgs...)
+	if len(tlsArgs) > 0 {
+		container.Args = append([]string{}, tlsArgs...)
 	}
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      proxy.Name,
-			Namespace: m.OperandNamespace,
-			Labels:    labels.Proxy(m.CR),
-		},
+		Name:      names.ProxyDeployment,
+		Namespace: m.OperandNamespace,
+		Labels:    labels.Proxy(m.CR),
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: labels.ProxySelector(m.CR)},
@@ -65,27 +61,23 @@ func ProxyDeployment(m *Context) *appsv1.Deployment {
 				},
 			},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels.Proxy(m.CR),
-					Annotations: map[string]string{
-						"openshift.io/required-scc": "restricted-v2",
-					},
+				Labels: labels.Proxy(m.CR),
+				Annotations: map[string]string{
+					"openshift.io/required-scc": "restricted-v2",
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: proxy.Name,
-					PriorityClassName:  proxy.PriorityClassName,
+					ServiceAccountName: names.ProxyDeployment,
+					PriorityClassName:  names.PriorityClass,
 					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot: boolPtr(true),
+						RunAsNonRoot: new(true),
 						SeccompProfile: &corev1.SeccompProfile{
 							Type: corev1.SeccompProfileTypeRuntimeDefault,
 						},
 					},
 					Containers: []corev1.Container{container},
 					Volumes: []corev1.Volume{{
-						Name: proxy.ServingCertSecret,
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: proxy.ServingCertSecret, DefaultMode: int32Ptr(420)},
-						},
+						Name:   names.ProxyServingCert,
+						Secret: &corev1.SecretVolumeSource{SecretName: names.ProxyServingCert, DefaultMode: new(int32(420))},
 					}},
 				},
 			},
@@ -94,23 +86,20 @@ func ProxyDeployment(m *Context) *appsv1.Deployment {
 }
 
 func ProxyService(m *Context) *corev1.Service {
-	proxy := m.Spec.Proxy
 	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      proxy.ServiceName,
-			Namespace: m.OperandNamespace,
-			Labels:    labels.Proxy(m.CR),
-			Annotations: map[string]string{
-				"service.beta.openshift.io/serving-cert-secret-name": proxy.ServingCertSecret,
-			},
+		Name:      names.ProxyService,
+		Namespace: m.OperandNamespace,
+		Labels:    labels.Proxy(m.CR),
+		Annotations: map[string]string{
+			"service.beta.openshift.io/serving-cert-secret-name": names.ProxyServingCert,
 		},
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
 			Selector: labels.ProxySelector(m.CR),
 			Ports: []corev1.ServicePort{{
-				Name:       proxy.Name + "-port",
-				Port:       proxy.Port,
-				TargetPort: intstrFromInt32(proxy.Port),
+				Name:       names.ProxyDeployment + "-port",
+				Port:       names.ProxyPort,
+				TargetPort: intstrFromInt32(names.ProxyPort),
 				Protocol:   corev1.ProtocolTCP,
 			}},
 		},
@@ -118,7 +107,7 @@ func ProxyService(m *Context) *corev1.Service {
 }
 
 func ProxyNetworkPolicy(m *Context) *networkingv1.NetworkPolicy {
-	proxyPort := intstrFromInt32(m.Spec.Proxy.Port)
+	proxyPort := intstrFromInt32(names.ProxyPort)
 	udp := corev1.ProtocolUDP
 	dns := intstr.FromInt32(53)
 	https := intstr.FromInt32(443)
@@ -126,11 +115,9 @@ func ProxyNetworkPolicy(m *Context) *networkingv1.NetworkPolicy {
 	npLabels := labels.Proxy(m.CR)
 	npLabels["np.kubevirt.io/allow-access-cluster-services"] = "true"
 	return &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "kubevirt-apiserver-proxy-np",
-			Namespace: m.OperandNamespace,
-			Labels:    npLabels,
-		},
+		Name:      names.ProxyNetworkPolicy,
+		Namespace: m.OperandNamespace,
+		Labels:    npLabels,
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{MatchLabels: labels.ProxySelector(m.CR)},
 			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
@@ -162,31 +149,25 @@ func ProxyNetworkPolicy(m *Context) *networkingv1.NetworkPolicy {
 }
 
 func ProxyRoute(m *Context) *routev1.Route {
-	route := m.Spec.Route
 	weight := int32(100)
-	targetPort := intstrFromInt32(m.Spec.Proxy.Port)
+	targetPort := intstrFromInt32(names.ProxyPort)
 	obj := &routev1.Route{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      route.Name,
-			Namespace: m.OperandNamespace,
-			Labels:    labels.Proxy(m.CR),
-			Annotations: map[string]string{
-				"haproxy.router.openshift.io/hsts_header": "max-age=31536000;includeSubDomains;preload",
-			},
+		Name:      names.ProxyRoute,
+		Namespace: m.OperandNamespace,
+		Labels:    labels.Proxy(m.CR),
+		Annotations: map[string]string{
+			"haproxy.router.openshift.io/hsts_header": "max-age=31536000;includeSubDomains;preload",
 		},
 		Spec: routev1.RouteSpec{
 			To: routev1.RouteTargetReference{
 				Kind:   "Service",
-				Name:   m.Spec.Proxy.ServiceName,
+				Name:   names.ProxyService,
 				Weight: &weight,
 			},
 			Port:           &routev1.RoutePort{TargetPort: targetPort},
 			TLS:            &routev1.TLSConfig{Termination: routev1.TLSTerminationReencrypt},
 			WildcardPolicy: routev1.WildcardPolicyNone,
 		},
-	}
-	if route.Host != "" {
-		obj.Spec.Host = route.Host
 	}
 	return obj
 }

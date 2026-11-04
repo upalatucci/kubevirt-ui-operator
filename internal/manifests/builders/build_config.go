@@ -4,10 +4,9 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	consoleuiv1alpha1 "github.com/kubevirt-ui/kubevirt-ui-operator/api/v1alpha1"
 	"github.com/kubevirt-ui/kubevirt-ui-operator/internal/labels"
+	"github.com/kubevirt-ui/kubevirt-ui-operator/internal/names"
 )
 
 func nginxConfig(port int32) string {
@@ -42,57 +41,31 @@ http {
 `, port, port)
 }
 
-func featuresData(spec *consoleuiv1alpha1.KubeVirtConsoleUISpec) map[string]string {
-	f := spec.Config.Features
-	data := map[string]string{
-		"automaticSubscriptionActivationKey":  f.AutomaticSubscriptionActivationKey,
-		"automaticSubscriptionOrganizationId": f.AutomaticSubscriptionOrganizationId,
-		"disabledGuestSystemLogsAccess":       f.DisabledGuestSystemLogsAccess,
-		"kubevirtApiserverProxy":              f.KubevirtApiserverProxy,
-		"loadBalancerEnabled":                 f.LoadBalancerEnabled,
-		"nodePortAddress":                     f.NodePortAddress,
-		"nodePortEnabled":                     f.NodePortEnabled,
-	}
-	if f.IPStackType != "" {
-		data["ipStackType"] = f.IPStackType
-	}
-	if f.HCOVersion != "" {
-		data["hcoVersion"] = f.HCOVersion
-	}
-	return data
-}
-
 func NginxConfigMap(m *Context) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.Spec.Config.NginxConfigMapName,
-			Namespace: m.OperandNamespace,
-			Labels:    labels.Plugin(m.CR),
-		},
+		Name:      names.NginxConfigMap,
+		Namespace: m.OperandNamespace,
+		Labels:    labels.Plugin(m.CR),
 		Data: map[string]string{
-			"nginx.conf": nginxConfig(m.Spec.Plugin.Port),
+			"nginx.conf": nginxConfig(names.PluginPort),
 		},
 	}
 }
 
 func UserSettingsConfigMap(m *Context) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.Spec.Config.UserSettingsConfigMapName,
-			Namespace: m.OperandNamespace,
-			Labels:    labels.UIConfig(m.CR),
-		},
-		Data: map[string]string{},
+		Name:      names.UserSettingsConfigMap,
+		Namespace: m.OperandNamespace,
+		Labels:    labels.UIConfig(m.CR),
+		Data:      map[string]string{},
 	}
 }
 
-func FeaturesConfigMap(m *Context) *corev1.ConfigMap {
+func FeaturesConfigMapShell(m *Context, data map[string]string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.Spec.Config.FeaturesConfigMapName,
-			Namespace: m.OperandNamespace,
-			Labels:    labels.UIConfig(m.CR),
-		},
-		Data: featuresData(&m.Spec),
+		Name:      names.FeaturesConfigMap,
+		Namespace: m.OperandNamespace,
+		Labels:    labels.UIConfig(m.CR),
+		Data:      data,
 	}
 }
