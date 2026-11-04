@@ -15,15 +15,8 @@ const (
 // Operand names, images, and namespace are fixed by the operator (see OPERAND_NAMESPACE and image env vars).
 // Feature toggles and hcoVersion live in the kubevirt-ui-features ConfigMap (operator-managed).
 type KubeVirtConsoleUISpec struct {
-	PriorityClass PriorityClassSpec `json:"priorityClass,omitempty"`
-
 	// Proxy holds optional proxy container flags (for example TLS profile args on OpenShift).
 	Proxy ProxySpec `json:"proxy,omitempty"`
-}
-
-type PriorityClassSpec struct {
-	// +kubebuilder:default=true
-	Create *bool `json:"create,omitempty"`
 }
 
 type ProxySpec struct {

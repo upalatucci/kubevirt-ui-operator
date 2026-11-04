@@ -23,10 +23,8 @@ import (
 
 // ReconcileStack applies Helm-parity operands for the effective spec in Context.
 func ReconcileStack(ctx context.Context, c client.Client, scheme *runtime.Scheme, m *Context) error {
-	if pc := builders.PriorityClass(m); pc != nil {
-		if err := reconcileCluster(ctx, c, func() client.Object { return builders.PriorityClass(m) }); err != nil {
-			return err
-		}
+	if err := reconcileCluster(ctx, c, func() client.Object { return builders.PriorityClass(m) }); err != nil {
+		return err
 	}
 
 	steps := []func() error{

@@ -4,17 +4,13 @@ import (
 	consolev1 "github.com/openshift/api/console/v1"
 	corev1 "k8s.io/api/core/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
-	"k8s.io/utils/ptr"
 
 	"github.com/kubevirt-ui/kubevirt-ui-operator/internal/labels"
 	"github.com/kubevirt-ui/kubevirt-ui-operator/internal/names"
 )
 
-// PriorityClass returns the cluster PriorityClass when create is enabled.
+// PriorityClass returns the cluster PriorityClass reconciled for the UI stack.
 func PriorityClass(m *Context) *schedulingv1.PriorityClass {
-	if !ptr.Deref(m.Spec.PriorityClass.Create, true) {
-		return nil
-	}
 	policy := corev1.PreemptLowerPriority
 	value := names.PriorityClassValue
 	return &schedulingv1.PriorityClass{

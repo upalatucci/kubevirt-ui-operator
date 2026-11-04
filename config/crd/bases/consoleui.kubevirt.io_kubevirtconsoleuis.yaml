@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.22.0
+    controller-gen.kubebuilder.io/version: v0.16.5
   name: kubevirtconsoleuis.consoleui.kubevirt.io
 spec:
   group: consoleui.kubevirt.io
@@ -52,12 +52,6 @@ spec:
               Operand names, images, and namespace are fixed by the operator (see OPERAND_NAMESPACE and image env vars).
               Feature toggles and hcoVersion live in the kubevirt-ui-features ConfigMap (operator-managed).
             properties:
-              priorityClass:
-                properties:
-                  create:
-                    default: true
-                    type: boolean
-                type: object
               proxy:
                 description: Proxy holds optional proxy container flags (for example
                   TLS profile args on OpenShift).
