@@ -1,60 +1,51 @@
 package labels
 
 import (
+	"maps"
+
 	consoleuiv1alpha1 "github.com/kubevirt-ui/kubevirt-ui-operator/api/v1alpha1"
 )
 
 const chartName = "kubevirt-console-ui"
 
-// Base returns labels shared by all operands (Helm baseLabels parity).
+const (
+	appName      = "kubevirt-console-ui"
+	managedBy    = "kubevirt-ui-operator"
+	appPartOf    = "kubevirt-ui"
+)
+
+// Base returns labels shared by all operands reconciled by kubevirt-ui-operator.
 func Base(cr *consoleuiv1alpha1.KubeVirtConsoleUI) map[string]string {
-	out := map[string]string{
+	return map[string]string{
 		"helm.sh/chart":                chartName,
 		"app.kubernetes.io/instance":   cr.Name,
-		"app.kubernetes.io/managed-by": "kubevirt-ui-operator",
+		"app.kubernetes.io/managed-by": managedBy,
+		"app.kubernetes.io/part-of":    appPartOf,
+		"app":                          appName,
 	}
-	if consoleuiv1alpha1.BoolOrDefault(cr.Spec.HCOLabels.Enabled, true) {
-		out["app"] = cr.Spec.HCOLabels.App
-		out["app.kubernetes.io/managed-by"] = cr.Spec.HCOLabels.ManagedBy
-		out["app.kubernetes.io/part-of"] = cr.Spec.HCOLabels.PartOf
-		if cr.Spec.HCOLabels.Version != "" {
-			out["app.kubernetes.io/version"] = cr.Spec.HCOLabels.Version
-		}
-	}
-	return out
 }
 
 func merge(base map[string]string, extra map[string]string) map[string]string {
 	out := make(map[string]string, len(base)+len(extra))
-	for k, v := range base {
-		out[k] = v
-	}
-	for k, v := range extra {
-		out[k] = v
-	}
+	maps.Copy(out, base)
+	maps.Copy(out, extra)
 	return out
 }
 
 // PluginSelector returns Deployment/Service selector labels for the console plugin.
-func PluginSelector(cr *consoleuiv1alpha1.KubeVirtConsoleUI) map[string]string {
-	out := map[string]string{
+func PluginSelector(_ *consoleuiv1alpha1.KubeVirtConsoleUI) map[string]string {
+	return map[string]string{
 		"app.kubernetes.io/component": "kubevirt-console-plugin",
+		"app":                         appName,
 	}
-	if consoleuiv1alpha1.BoolOrDefault(cr.Spec.HCOLabels.Enabled, true) {
-		out["app"] = cr.Spec.HCOLabels.App
-	}
-	return out
 }
 
 // ProxySelector returns Deployment/Service selector labels for the apiserver proxy.
-func ProxySelector(cr *consoleuiv1alpha1.KubeVirtConsoleUI) map[string]string {
-	out := map[string]string{
+func ProxySelector(_ *consoleuiv1alpha1.KubeVirtConsoleUI) map[string]string {
+	return map[string]string{
 		"app.kubernetes.io/component": "kubevirt-apiserver-proxy",
+		"app":                         appName,
 	}
-	if consoleuiv1alpha1.BoolOrDefault(cr.Spec.HCOLabels.Enabled, true) {
-		out["app"] = cr.Spec.HCOLabels.App
-	}
-	return out
 }
 
 // Plugin returns metadata labels for plugin operands.

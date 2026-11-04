@@ -22,6 +22,7 @@ import (
 
 	consoleuiv1alpha1 "github.com/kubevirt-ui/kubevirt-ui-operator/api/v1alpha1"
 	"github.com/kubevirt-ui/kubevirt-ui-operator/controllers"
+	"github.com/kubevirt-ui/kubevirt-ui-operator/internal/hcoversion"
 	"github.com/kubevirt-ui/kubevirt-ui-operator/internal/operconfig"
 )
 
@@ -34,6 +35,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 	utilruntime.Must(consoleuiv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(hcoversion.AddToScheme(scheme))
 	utilruntime.Must(consolev1.AddToScheme(scheme))
 	utilruntime.Must(operatorv1.AddToScheme(scheme))
 	utilruntime.Must(routev1.AddToScheme(scheme))
@@ -46,14 +48,21 @@ func main() {
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metric endpoint binds to. Use :8080 to expose metrics.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
-	opts := zap.Options{Development: true}
+	opts := zap.Options{
+		Development: false,
+	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	opCfg := operconfig.LoadFromEnv()
-	setupLog.Info("operator configuration", "operandNamespace", opCfg.OperandNamespace)
+	setupLog.Info("operator configuration",
+		"operandNamespace", opCfg.OperandNamespace,
+		"hcoNamespace", opCfg.HCONamespace,
+		"pluginImage", opCfg.PluginImage,
+		"proxyImage", opCfg.ProxyImage,
+	)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,

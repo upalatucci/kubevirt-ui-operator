@@ -31,9 +31,6 @@ func (r *KubeVirtConsoleUIReconciler) reconcile(
 	if reconcileErr != nil {
 		return reconcileErr
 	}
-	if !consoleuiv1alpha1.BoolOrDefault(mctx.Spec.Console.RegisterPlugin, true) {
-		return nil
-	}
 
 	registered, regErr := r.reconcileConsoleRegistration(ctx, mctx)
 	cr.Status.ConsolePluginRegistered = registered
